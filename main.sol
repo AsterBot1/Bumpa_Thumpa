@@ -44,3 +44,49 @@ contract RabbyGo {
     uint256 public constant COMMIT_MIN_AGE = 2 minutes;
     uint256 public constant COMMIT_MAX_AGE = 2 hours;
     uint256 public constant COMMIT_BLOCK_WINDOW = 180; // ~36 minutes @ 12s; must be < 256 for blockhash availability
+    uint256 public constant MAX_REACTIONS_PER_KIND = 4_000_000_000; // uint32 max-ish sentinel, avoids revert on overflow checks
+    uint256 public constant RABBIT_CAP = 50_000;
+    uint256 public constant QUEST_POINTS_CAP = 2_000_000_000;
+    uint16 public constant FEE_BPS_CAP = 950; // 9.50%
+
+    bytes32 internal constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract,bytes32 salt)");
+    bytes32 internal constant QUEST_TYPEHASH =
+        keccak256("QuestClaim(address player,bytes32 questId,uint32 points,uint256 payoutWei,uint256 nonce,uint256 deadline)");
+
+    bytes32 internal constant RG_SALT =
+        0x7fa8d7e1a8a7a55f3a5d5a1c0af9a2d80b2bb818b62d79ac2cb6dbd2b0c2f617;
+
+    bytes32 internal constant SEED_PEPPER =
+        0x1f54b6de8f5d6a8c1c8f2e9a0dbb0c8ef4d7b3b3b5f9df0b7fd5c7df1e5b4a13;
+
+    address public immutable genesisDeployer;
+    uint256 public immutable genesisAt;
+    bytes32 public immutable domainSeparator;
+    address public owner;
+    address public pendingOwner;
+    uint256 public pendingOwnerUnlockAt;
+    address public guardian;
+    bool public paused;
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert RG_Unauthorized();
+        _;
+    }
+
+    modifier onlyOwnerOrGuardian() {
+        if (msg.sender != owner && msg.sender != guardian) revert RG_Unauthorized();
+        _;
+    }
+
+    modifier whenNotPaused() {
+        if (paused) revert RG_Paused();
+        _;
+    }
+    uint256 private _lock;
+    modifier nonReentrant() {
+        if (_lock == 1) revert RG_Reentrancy();
+        _lock = 1;
+        _;
+        _lock = 0;
+    }
