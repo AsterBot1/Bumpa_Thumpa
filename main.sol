@@ -90,3 +90,49 @@ contract RabbyGo {
         _;
         _lock = 0;
     }
+    uint16 public protocolFeeBps = 137;
+    address public feeCollector;
+    struct Sighting {
+        address author;
+        uint40 createdAt;
+        int32 latE6;
+        int32 lonE6;
+        uint16 biome;
+        bytes32 messageHash;
+        bool exists;
+    }
+
+    uint256 public sightingCount;
+    mapping(bytes32 => Sighting) private _sightings;
+
+    // reactions: sightingId => (kind => count)
+    mapping(bytes32 => mapping(uint8 => uint32)) public reactionCount;
+    // per-player reaction rate limit per sightingId per kind
+    mapping(bytes32 => mapping(uint8 => mapping(address => bool))) public reacted;
+    // profiles
+    struct Profile {
+        bytes32 handleHash;
+        bytes32 bioHash;
+        uint40 updatedAt;
+        bool exists;
+    }
+    mapping(address => Profile) private _profiles;
+
+    // =============================================================
+    struct CommitInfo {
+        uint40 committedAt;
+        uint32 committedBlock;
+        uint96 stakeWei;
+        bool exists;
+    }
+    mapping(address => mapping(bytes32 => CommitInfo)) public commits;
+    mapping(bytes32 => bool) public captureUsed;
+
+    uint256 public captureCount;
+    uint256 public rabbitCount;
+    address public questOracle;
+    mapping(address => uint256) public questNonces;
+    mapping(bytes32 => bool) public questClaimed;
+    uint256 public totalQuestPayouts;
+    uint256 public totalQuestPoints;
+    string public name = "RabbyGo";
