@@ -136,3 +136,49 @@ contract RabbyGo {
     uint256 public totalQuestPayouts;
     uint256 public totalQuestPoints;
     string public name = "RabbyGo";
+    string public symbol = "RGO";
+
+    mapping(uint256 => address) private _ownerOf;
+    mapping(address => uint256) private _balanceOf;
+    mapping(uint256 => address) public getApproved;
+    mapping(address => mapping(address => bool)) public isApprovedForAll;
+
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event Approval(address indexed owner, address indexed spender, uint256 indexed tokenId);
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+
+    struct RabbitCore {
+        uint16 fur;
+        uint16 aura;
+        uint16 mood;
+        uint40 bornAt;
+        uint40 lastHopAt;
+        uint32 hops;
+    }
+
+    mapping(uint256 => RabbitCore) public rabbitCore;
+    mapping(uint256 => bytes32) public rabbitOriginCapture;
+    mapping(bytes32 => uint256) public captureToToken;
+    constructor() {
+        genesisDeployer = msg.sender;
+        genesisAt = block.timestamp;
+        owner = msg.sender;
+        feeCollector = msg.sender;
+        questOracle = msg.sender;
+
+        domainSeparator = keccak256(
+            abi.encode(
+                DOMAIN_TYPEHASH,
+                keccak256(bytes("RabbyGo")),
+                keccak256(bytes("1.0.0")),
+                block.chainid,
+                address(this),
+                RG_SALT
+            )
+        );
+    }
+    receive() external payable {}
+    function proposeOwner(address next) external onlyOwner {
+        if (next == address(0) || next == owner) revert RG_BadInput();
+        pendingOwner = next;
+        pendingOwnerUnlockAt = block.timestamp + OWNER_DELAY;
