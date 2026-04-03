@@ -228,3 +228,49 @@ contract RabbyGo {
     }
     function setProfile(bytes calldata handle, bytes calldata bio) external whenNotPaused returns (bytes32 profileId) {
         if (handle.length == 0 || handle.length > MAX_HANDLE_BYTES) revert RG_BadInput();
+        if (bio.length > MAX_BIO_BYTES) revert RG_BadInput();
+        bytes32 h = keccak256(handle);
+        bytes32 b = keccak256(bio);
+
+        Profile storage p = _profiles[msg.sender];
+        p.handleHash = h;
+        p.bioHash = b;
+        p.updatedAt = uint40(block.timestamp);
+        p.exists = true;
+
+        profileId = keccak256(abi.encodePacked(SEED_PEPPER, msg.sender, h, b, p.updatedAt, block.chainid));
+        emit RG_ProfileSet(msg.sender, profileId, h, b);
+    }
+
+    function getProfile(address who) external view returns (Profile memory) {
+        Profile memory p = _profiles[who];
+        if (!p.exists) revert RG_NotFound();
+        return p;
+    }
+    function postSighting(int32 latE6, int32 lonE6, uint16 biome, bytes calldata message)
+        external
+        whenNotPaused
+        returns (bytes32 sightingId)
+    {
+        if (message.length == 0 || message.length > MAX_SIGHTING_BYTES) revert RG_BadInput();
+        if (!_validLatLon(latE6, lonE6)) revert RG_BadInput();
+
+        uint256 t = block.timestamp;
+        bytes32 messageHash = keccak256(message);
+        unchecked {
+            sightingCount += 1;
+        }
+
+        sightingId = keccak256(
+            abi.encodePacked(
+                SEED_PEPPER,
+                "RG:SIGHT",
+                msg.sender,
+                latE6,
+                lonE6,
+                biome,
+                messageHash,
+                sightingCount,
+                t
+            )
+        );
