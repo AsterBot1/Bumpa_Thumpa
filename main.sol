@@ -182,3 +182,49 @@ contract RabbyGo {
         if (next == address(0) || next == owner) revert RG_BadInput();
         pendingOwner = next;
         pendingOwnerUnlockAt = block.timestamp + OWNER_DELAY;
+        emit RG_OwnerProposed(owner, next, pendingOwnerUnlockAt);
+    }
+
+    function clearProposedOwner() external onlyOwner {
+        pendingOwner = address(0);
+        pendingOwnerUnlockAt = 0;
+        emit RG_OwnerProposed(owner, address(0), 0);
+    }
+
+    function acceptOwner() external {
+        if (msg.sender != pendingOwner) revert RG_Unauthorized();
+        if (block.timestamp < pendingOwnerUnlockAt) revert RG_TooSoon(pendingOwnerUnlockAt);
+        address prev = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        pendingOwnerUnlockAt = 0;
+        emit RG_OwnerAccepted(prev, owner);
+    }
+
+    function setGuardian(address next) external onlyOwner {
+        if (next == owner) revert RG_BadInput();
+        address prev = guardian;
+        guardian = next;
+        emit RG_GuardianSet(prev, next);
+    }
+
+    function setPaused(bool on) external onlyOwnerOrGuardian {
+        paused = on;
+        emit RG_PauseSet(on);
+    }
+
+    function setQuestOracle(address next) external onlyOwner {
+        if (next == address(0)) revert RG_BadInput();
+        address prev = questOracle;
+        questOracle = next;
+        emit RG_QuestOracleSet(prev, next);
+    }
+    function setFee(uint16 feeBps, address collector) external onlyOwner {
+        if (feeBps > FEE_BPS_CAP) revert RG_BadInput();
+        if (collector == address(0)) revert RG_BadInput();
+        protocolFeeBps = feeBps;
+        feeCollector = collector;
+        emit RG_FeeDial(feeBps, collector);
+    }
+    function setProfile(bytes calldata handle, bytes calldata bio) external whenNotPaused returns (bytes32 profileId) {
+        if (handle.length == 0 || handle.length > MAX_HANDLE_BYTES) revert RG_BadInput();
