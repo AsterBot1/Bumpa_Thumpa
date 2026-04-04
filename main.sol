@@ -274,3 +274,49 @@ contract RabbyGo {
                 t
             )
         );
+        if (_sightings[sightingId].exists) revert RG_Exists();
+        _sightings[sightingId] = Sighting({
+            author: msg.sender,
+            createdAt: uint40(t),
+            latE6: latE6,
+            lonE6: lonE6,
+            biome: biome,
+            messageHash: messageHash,
+            exists: true
+        });
+
+        emit RG_SightingPosted(sightingId, msg.sender, latE6, lonE6, biome, messageHash);
+    }
+
+    function getSighting(bytes32 sightingId) external view returns (Sighting memory) {
+        Sighting memory s = _sightings[sightingId];
+        if (!s.exists) revert RG_NotFound();
+        return s;
+    }
+
+    function react(bytes32 sightingId, uint8 kind) external whenNotPaused {
+        if (!_sightings[sightingId].exists) revert RG_NotFound();
+        if (kind == 0) revert RG_BadInput();
+        if (reacted[sightingId][kind][msg.sender]) revert RG_Exists();
+        reacted[sightingId][kind][msg.sender] = true;
+
+        uint32 next = reactionCount[sightingId][kind] + 1;
+        if (next == 0 || next > MAX_REACTIONS_PER_KIND) revert RG_BadInput();
+        reactionCount[sightingId][kind] = next;
+
+        emit RG_SightingReacted(sightingId, msg.sender, kind, next);
+    }
+    /// commit = keccak256(abi.encodePacked("RG:CAPTURE", player, salt, latE6, lonE6, biome, intentHash))
+    /// intentHash can be any bytes32 the client uses to bind UI intent (e.g. sightingId or AR scene hash).
+    function commitCapture(bytes32 commit) external payable whenNotPaused {
+        if (commit == bytes32(0)) revert RG_BadInput();
+        CommitInfo storage ci = commits[msg.sender][commit];
+        if (ci.exists) revert RG_Exists();
+
+        uint256 stake = msg.value;
+        if (stake > type(uint96).max) revert RG_BadInput();
+
+        ci.committedAt = uint40(block.timestamp);
+        ci.committedBlock = uint32(block.number);
+        ci.stakeWei = uint96(stake);
+        ci.exists = true;
