@@ -320,3 +320,49 @@ contract RabbyGo {
         ci.committedBlock = uint32(block.number);
         ci.stakeWei = uint96(stake);
         ci.exists = true;
+
+        emit RG_CaptureCommitted(msg.sender, commit, ci.committedAt, ci.committedBlock);
+    }
+
+    struct Reveal {
+        bytes32 salt;
+        int32 latE6;
+        int32 lonE6;
+        uint16 biome;
+        bytes32 intentHash;
+    }
+
+    function revealCapture(Reveal calldata r) external whenNotPaused nonReentrant returns (bytes32 captureId, bool success, uint256 tokenId) {
+        if (!_validLatLon(r.latE6, r.lonE6)) revert RG_BadInput();
+        if (r.salt == bytes32(0)) revert RG_BadInput();
+
+        bytes32 commit = keccak256(abi.encodePacked("RG:CAPTURE", msg.sender, r.salt, r.latE6, r.lonE6, r.biome, r.intentHash));
+        CommitInfo memory ci = commits[msg.sender][commit];
+        if (!ci.exists) revert RG_NotFound();
+
+        uint256 nowTs = block.timestamp;
+        uint256 minAt = uint256(ci.committedAt) + COMMIT_MIN_AGE;
+        if (nowTs < minAt) revert RG_TooSoon(minAt);
+        uint256 maxAt = uint256(ci.committedAt) + COMMIT_MAX_AGE;
+        if (nowTs > maxAt) revert RG_Expired();
+
+        // Must be recent enough for blockhash usage but old enough to reduce same-block manipulation.
+        uint256 ageBlocks = block.number - uint256(ci.committedBlock);
+        if (ageBlocks == 0) revert RG_TooSoon(block.timestamp + 1);
+        if (ageBlocks > COMMIT_BLOCK_WINDOW) revert RG_Expired();
+
+        // Consume commit
+        delete commits[msg.sender][commit];
+
+        captureId = keccak256(
+            abi.encodePacked(
+                SEED_PEPPER,
+                "RG:CAPID",
+                msg.sender,
+                commit,
+                ci.committedAt,
+                ci.committedBlock,
+                block.chainid
+            )
+        );
+        if (captureUsed[captureId]) revert RG_Exists();
