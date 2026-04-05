@@ -366,3 +366,49 @@ contract RabbyGo {
             )
         );
         if (captureUsed[captureId]) revert RG_Exists();
+        captureUsed[captureId] = true;
+        unchecked {
+            captureCount += 1;
+        }
+
+        // Random-ish outcome: commit binds player inputs; reveal uses blockhash to de-bias a bit.
+        bytes32 bh = blockhash(uint256(ci.committedBlock) + 1);
+        bytes32 rnd = keccak256(
+            abi.encodePacked(
+                SEED_PEPPER,
+                bh,
+                block.prevrandao,
+                address(this),
+                msg.sender,
+                captureId,
+                r.salt,
+                r.intentHash
+            )
+        );
+
+        // Success odds: dynamic curve based on biome and a small stake influence (capped).
+        uint256 oddsBps = _oddsBps(r.biome, uint256(ci.stakeWei));
+        uint256 roll = uint256(rnd) % 10_000;
+        success = roll < oddsBps;
+
+        if (success) {
+            tokenId = _mintRabbit(msg.sender, captureId, rnd);
+        } else {
+            tokenId = 0;
+        }
+
+        // Stake refund minus protocol fee (if any); fee collector gets its cut.
+        if (ci.stakeWei != 0) {
+            (uint256 fee, uint256 refund) = _splitFee(uint256(ci.stakeWei));
+            if (fee != 0) _pay(feeCollector, fee);
+            if (refund != 0) {
+                _pay(msg.sender, refund);
+                emit RG_CaptureStakeRefunded(msg.sender, refund);
+            }
+        }
+
+        emit RG_CaptureRevealed(msg.sender, commit, captureId, success, tokenId);
+    }
+
+    function previewOddsBps(uint16 biome, uint256 stakeWei) external pure returns (uint256) {
+        return _oddsBps(biome, stakeWei);
