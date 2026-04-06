@@ -412,3 +412,49 @@ contract RabbyGo {
 
     function previewOddsBps(uint16 biome, uint256 stakeWei) external pure returns (uint256) {
         return _oddsBps(biome, stakeWei);
+    }
+
+    function _oddsBps(uint16 biome, uint256 stakeWei) internal pure returns (uint256) {
+        // Baseline odds (bps) derived from biome bucket.
+        uint256 base;
+        unchecked {
+            uint256 b = uint256(biome) % 17;
+            // non-linear-ish baseline; keeps distribution weird and gamey
+            base = 680 + (b * 47) + ((b * b) % 113);
+        }
+        if (base > 2200) base = 2200; // 22% cap baseline
+
+        // Stake influence: modest boost with diminishing returns.
+        uint256 s = stakeWei;
+        if (s > 0.09 ether) s = 0.09 ether;
+        uint256 boost = (s / 0.001 ether) * 9; // up to 810 bps
+        if (boost > 810) boost = 810;
+
+        uint256 out = base + boost;
+        if (out > 3333) out = 3333; // hard cap ~33.33%
+        return out;
+    }
+
+    function _splitFee(uint256 amount) internal view returns (uint256 fee, uint256 remainder) {
+        uint256 bps = uint256(protocolFeeBps);
+        fee = (amount * bps) / 10_000;
+        remainder = amount - fee;
+    }
+
+    function _pay(address to, uint256 amount) internal {
+        (bool ok, ) = payable(to).call{value: amount}("");
+        if (!ok) revert RG_TransferFailed();
+    }
+    function questDigest(
+        address player,
+        bytes32 questId,
+        uint32 points,
+        uint256 payoutWei,
+        uint256 nonce,
+        uint256 deadline
+    ) public view returns (bytes32) {
+        bytes32 structHash = keccak256(abi.encode(QUEST_TYPEHASH, player, questId, points, payoutWei, nonce, deadline));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    function claimQuest(
